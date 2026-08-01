@@ -49,21 +49,23 @@ pipeline {
             }
         }
 
-        stage('Deploy to Azure VM') {
+stage('Deploy') {
     steps {
-        sshagent(['azure-vm-ssh']) {
-            sh '''
-            ssh -o StrictHostKeyChecking=no azureuser@20.244.13.187 "
-            docker pull sanjugm2000/human-activity:latest
-            docker stop human-activity || true
-            docker rm human-activity || true
-            docker run -d --name human-activity -p 5000:5000 sanjugm2000/human-activity:latest
-            "
-            '''
-        }
+        sh '''
+        docker pull sanju2000/human-activity:latest
+
+        docker stop human-activity || true
+
+        docker rm human-activity || true
+
+        docker run -d \
+          --name human-activity \
+          -p 5000:5000 \
+          --restart unless-stopped \
+          sanju2000/human-activity:latest
+        '''
     }
 }
-
     }
 
     post {
