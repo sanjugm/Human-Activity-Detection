@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME = "human-activity"
         IMAGE_TAG  = "latest"
 
-        DOCKER_REPO = "sanjugm2000/human-activity"
+        DOCKER_REPO = "sanju2000/human-activity"
 
         SONARQUBE_ENV = "SonarQube"
 
