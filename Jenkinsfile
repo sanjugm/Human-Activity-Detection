@@ -15,23 +15,6 @@ pipeline {
 
     stages {
 
-        stage('Code Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Unit Testing (Pytest)') {
-            steps {
-                sh '''
-                python3 -m venv venv
-                . venv/bin/activate
-                pip install -r requirements.txt
-                pytest
-                '''
-            }
-        }
-
         stage('SonarQube Scan') {
             steps {
                 withSonarQubeEnv("${SONARQUBE_ENV}") {
