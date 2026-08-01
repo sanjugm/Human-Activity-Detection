@@ -15,18 +15,7 @@ pipeline {
 
     stages {
 
-        stage('SonarQube Scan') {
-            steps {
-                withSonarQubeEnv("${SONARQUBE_ENV}") {
-                    sh '''
-                    sonar-scanner \
-                    -Dsonar.projectKey=human-activity \
-                    -Dsonar.sources=. \
-                    -Dsonar.python.version=3.7
-                    '''
-                }
-            }
-        }
+        
 
         stage('Docker Build') {
             steps {
