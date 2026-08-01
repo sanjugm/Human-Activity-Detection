@@ -2,74 +2,110 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "sanjugm2000/human-activity"
-        IMAGE_TAG = "latest"
+        IMAGE_NAME = "human-activity"
+        IMAGE_TAG  = "latest"
+
+        DOCKER_REPO = "sanjugm2000/human-activity"
+
+        SONARQUBE_ENV = "SonarQube"
+
+        AZURE_VM = "20.244.13.187"       
+        AZURE_USER = "azureuser"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Code Checkout') {
             steps {
-                git branch: 'main',
-                url: 'https://github.com/sanjugm/Python-Projects.git'
+                checkout scm
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Unit Testing (Pytest)') {
             steps {
-                sh 'python3 -m pip install -r requirements.txt'
+                sh '''
+                python3 -m venv venv
+                . venv/bin/activate
+                pip install -r requirements.txt
+                pytest
+                '''
             }
         }
 
-        stage('Run Tests') {
+        stage('SonarQube Scan') {
             steps {
-                sh 'pytest'
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
-            }
-        }
-
-        stage('Docker Login') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                withSonarQubeEnv("${SONARQUBE_ENV}") {
                     sh '''
-                    echo $DOCKER_PASS | docker login \
-                    -u $DOCKER_USER --password-stdin
+                    sonar-scanner \
+                    -Dsonar.projectKey=human-activity \
+                    -Dsonar.sources=. \
+                    -Dsonar.python.version=3.7
                     '''
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Docker Build') {
             steps {
-                sh 'docker push $IMAGE_NAME:$IMAGE_TAG'
+                sh '''
+                docker build -t $DOCKER_REPO:$IMAGE_TAG .
+                '''
             }
         }
 
-        stage('Deploy') {
+        stage('Docker Login') {
             steps {
-                sh 'kubectl apply -f deployment.yaml'
-                sh 'kubectl apply -f service.yaml'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'sanju2000',
+                        passwordVariable: '4jd18ee032'
+                    )
+                ]) {
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    '''
+                }
             }
         }
+
+        stage('Docker Push') {
+            steps {
+                sh '''
+                docker push $DOCKER_REPO:$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Deploy to Azure VM') {
+    steps {
+        sshagent(['azure-vm-ssh']) {
+            sh '''
+            ssh -o StrictHostKeyChecking=no azureuser@20.244.13.187 "
+            docker pull sanjugm2000/human-activity:latest
+            docker stop human-activity || true
+            docker rm human-activity || true
+            docker run -d --name human-activity -p 5000:5000 sanjugm2000/human-activity:latest
+            "
+            '''
+        }
+    }
+}
 
     }
 
     post {
+
         success {
-            echo 'Deployment Successful'
+            echo 'Application Successfully Deployed'
         }
 
         failure {
             echo 'Pipeline Failed'
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
