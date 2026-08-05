@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        PYTHON = "/var/lib/jenkins/.pyenv/versions/3.7.17/bin/python"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -13,8 +17,8 @@ pipeline {
         stage('Create Virtual Environment') {
             steps {
                 sh '''
-                pyenv local 3.7.17
-                python -m venv venv
+                $PYTHON --version
+                $PYTHON -m venv venv
                 '''
             }
         }
@@ -23,10 +27,13 @@ pipeline {
             steps {
                 sh '''
                 . venv/bin/activate
+
                 pip install --upgrade pip
                 pip install -r requirements.txt
                 pip install six
-                pip install detectron2==0.6 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.8/index.html
+
+                pip install detectron2==0.6 \
+                -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.8/index.html
                 '''
             }
         }
@@ -35,8 +42,10 @@ pipeline {
             steps {
                 sh '''
                 . venv/bin/activate
+
                 python app.py &
                 sleep 20
+
                 pkill -f app.py || true
                 '''
             }
