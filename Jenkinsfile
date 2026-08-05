@@ -44,7 +44,7 @@ pipeline {
                 . venv/bin/activate
 
                 python app.py &
-                sleep 20
+                sleep 150
 
                 pkill -f app.py || true
                 '''
