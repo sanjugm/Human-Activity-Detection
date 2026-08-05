@@ -46,7 +46,6 @@ pipeline {
                 python app.py &
                 sleep 150
 
-                pkill -f app.py || true
                 '''
             }
         }
