@@ -1,85 +1,54 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = "human-activity"
-        IMAGE_TAG  = "latest"
-
-        DOCKER_REPO = "sanju2000/human-activity"
-
-        SONARQUBE_ENV = "SonarQube"
-
-        AZURE_VM = "20.244.13.187"       
-        AZURE_USER = "azureuser"
-    }
-
     stages {
 
-        
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/sanjugm/Human-Activity-Detection.git'
+            }
+        }
 
-        stage('Docker Build') {
+        stage('Create Virtual Environment') {
             steps {
                 sh '''
-                docker build -t $DOCKER_REPO:$IMAGE_TAG .
+                pyenv local 3.7.17
+                python -m venv venv
                 '''
             }
         }
 
-     stage('Docker Login') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    '''
-                }
-            }
-        }
-
-        stage('Docker Push') {
+        stage('Install Dependencies') {
             steps {
                 sh '''
-                docker push $DOCKER_REPO:$IMAGE_TAG
+                . venv/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt
+                pip install six
+                pip install detectron2==0.6 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.8/index.html
                 '''
             }
         }
 
-stage('Deploy') {
-    steps {
-        sh '''
-        docker pull sanju2000/human-activity:latest
-
-        docker stop human-activity || true
-
-        docker rm human-activity || true
-
-        docker run -d \
-          --name human-activity \
-          -p 5000:5000 \
-          --restart unless-stopped \
-          sanju2000/human-activity:latest
-        '''
-    }
-}
+        stage('Verify Application') {
+            steps {
+                sh '''
+                . venv/bin/activate
+                python app.py &
+                sleep 20
+                pkill -f app.py || true
+                '''
+            }
+        }
     }
 
     post {
-
         success {
-            echo 'Application Successfully Deployed'
+            echo 'CI Pipeline Successful'
         }
-
         failure {
-            echo 'Pipeline Failed'
-        }
-
-        always {
-            cleanWs()
+            echo 'CI Pipeline Failed'
         }
     }
 }
