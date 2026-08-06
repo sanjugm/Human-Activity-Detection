@@ -4,8 +4,12 @@ WHITE_COLOR = (255, 255, 255)
 GREEN_COLOR = (0, 255, 0)
 
 
+def pt(p):
+    return (int(p[0].item()), int(p[1].item()))
+
+
 def draw_line(image, p1, p2, color):
-    cv2.line(image, p1, p2, color, thickness=2, lineType=cv2.LINE_AA)
+    cv2.line(image, pt(p1), pt(p2), color, thickness=2, lineType=cv2.LINE_AA)
 
 
 def find_person_indicies(scores):
@@ -40,39 +44,30 @@ def draw_keypoints(person, img):
     l_ankle = person[15]
     r_ankle = person[16]
 
-    draw_line(img, (l_shoulder[0], l_shoulder[1]),
-              (l_elbow[0], l_elbow[1]), GREEN_COLOR)
-    draw_line(img, (l_elbow[0], l_elbow[1]),
-              (l_wrist[0], l_wrist[1]), GREEN_COLOR)
-    draw_line(img, (l_shoulder[0], l_shoulder[1]),
-              (r_shoulder[0], r_shoulder[1]), GREEN_COLOR)
-    draw_line(img, (l_shoulder[0], l_shoulder[1]),
-              (l_hip[0], l_hip[1]), GREEN_COLOR)
-    draw_line(img, (r_shoulder[0], r_shoulder[1]),
-              (r_hip[0], r_hip[1]), GREEN_COLOR)
-    draw_line(img, (r_shoulder[0], r_shoulder[1]),
-              (r_elbow[0], r_elbow[1]), GREEN_COLOR)
-    draw_line(img, (r_elbow[0], r_elbow[1]),
-              (r_wrist[0], r_wrist[1]), GREEN_COLOR)
-    draw_line(img, (l_hip[0], l_hip[1]), (r_hip[0], r_hip[1]), GREEN_COLOR)
-    draw_line(img, (l_hip[0], l_hip[1]), (l_knee[0], l_knee[1]), GREEN_COLOR)
-    draw_line(img, (l_knee[0], l_knee[1]),
-              (l_ankle[0], l_ankle[1]), GREEN_COLOR)
-    draw_line(img, (r_hip[0], r_hip[1]), (r_knee[0], r_knee[1]), GREEN_COLOR)
-    draw_line(img, (r_knee[0], r_knee[1]),
-              (r_ankle[0], r_ankle[1]), GREEN_COLOR)
+    draw_line(img, l_shoulder, l_elbow, GREEN_COLOR)
+    draw_line(img, l_elbow, l_wrist, GREEN_COLOR)
+    draw_line(img, l_shoulder, r_shoulder, GREEN_COLOR)
+    draw_line(img, l_shoulder, l_hip, GREEN_COLOR)
+    draw_line(img, r_shoulder, r_hip, GREEN_COLOR)
+    draw_line(img, r_shoulder, r_elbow, GREEN_COLOR)
+    draw_line(img, r_elbow, r_wrist, GREEN_COLOR)
+    draw_line(img, l_hip, r_hip, GREEN_COLOR)
+    draw_line(img, l_hip, l_knee, GREEN_COLOR)
+    draw_line(img, l_knee, l_ankle, GREEN_COLOR)
+    draw_line(img, r_hip, r_knee, GREEN_COLOR)
+    draw_line(img, r_knee, r_ankle, GREEN_COLOR)
 
-    cv2.circle(img, (l_eye[0], l_eye[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_eye[0], r_eye[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_wrist[0], l_wrist[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_wrist[0], r_wrist[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_shoulder[0], l_shoulder[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_shoulder[0], r_shoulder[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_elbow[0], l_elbow[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_elbow[0], r_elbow[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_hip[0], l_hip[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_hip[0], r_hip[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_knee[0], l_knee[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_knee[0], r_knee[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (l_ankle[0], l_ankle[1]), 4, WHITE_COLOR, -1)
-    cv2.circle(img, (r_ankle[0], r_ankle[1]), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_eye), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_eye), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_wrist), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_wrist), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_shoulder), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_shoulder), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_elbow), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_elbow), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_hip), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_hip), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_knee), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_knee), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(l_ankle), 4, WHITE_COLOR, -1)
+    cv2.circle(img, pt(r_ankle), 4, WHITE_COLOR, -1)
