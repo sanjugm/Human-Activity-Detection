@@ -1,30 +1,51 @@
 pipeline {
+
     agent any
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
 
     environment {
 
-        // Python 3.7.17 installed on Jenkins server
+        // ==========================================
+        // Python
+        // ==========================================
         PYTHON = "/var/lib/jenkins/.pyenv/versions/3.7.17/bin/python"
 
+        // ==========================================
+        // Docker
+        // ==========================================
         IMAGE_NAME = "had"
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         CONTAINER_NAME = "had-app"
         VOLUME_NAME = "had-venv"
 
+        // ==========================================
+        // Azure Container Registry
+        // ==========================================
         ACR_LOGIN_SERVER = "teammaverick.azurecr.io"
     }
 
     stages {
 
-        // =====================================================
-        // 1. Checkout
-        // =====================================================
+        // =========================================================
+        // 1. CHECKOUT
+        // =========================================================
         stage('Checkout') {
+
             steps {
 
-                git branch: 'main',
+                echo "=============================="
+                echo "Checking out source code"
+                echo "=============================="
+
+                git(
+                    branch: 'main',
                     url: 'https://github.com/sanjugm/Human-Activity-Detection.git'
+                )
 
                 sh '''
                     echo "=============================="
@@ -44,10 +65,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 2. Create Virtual Environment
-        // =====================================================
+        // =========================================================
+        // 2. CREATE VIRTUAL ENVIRONMENT
+        // =========================================================
         stage('Create Virtual Environment') {
+
             steps {
 
                 sh '''
@@ -60,12 +82,20 @@ pipeline {
                     $PYTHON --version
 
                     echo "=============================="
-                    echo "Creating Virtual Environment"
+                    echo "Removing old virtual environment"
                     echo "=============================="
 
                     rm -rf venv
 
+                    echo "=============================="
+                    echo "Creating virtual environment"
+                    echo "=============================="
+
                     $PYTHON -m venv venv
+
+                    echo "=============================="
+                    echo "Activating virtual environment"
+                    echo "=============================="
 
                     . venv/bin/activate
 
@@ -76,10 +106,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 3. Install Dependencies
-        // =====================================================
+        // =========================================================
+        // 3. INSTALL DEPENDENCIES
+        // =========================================================
         stage('Install Dependencies') {
+
             steps {
 
                 sh '''
@@ -88,28 +119,37 @@ pipeline {
                     . venv/bin/activate
 
                     echo "=============================="
-                    echo "Upgrading pip"
+                    echo "Python"
                     echo "=============================="
 
-                    pip install --upgrade pip
+                    python --version
+                    pip --version
 
                     echo "=============================="
                     echo "Installing requirements.txt"
                     echo "=============================="
 
-                    pip install -r requirements.txt
+                    pip install \
+                        --no-cache-dir \
+                        --default-timeout=1000 \
+                        -r requirements.txt
 
                     echo "=============================="
                     echo "Installing six"
                     echo "=============================="
 
-                    pip install six
+                    pip install \
+                        --no-cache-dir \
+                        six
 
                     echo "=============================="
                     echo "Installing Detectron2"
                     echo "=============================="
 
-                    pip install detectron2==0.6 \
+                    pip install \
+                        --no-cache-dir \
+                        --default-timeout=1000 \
+                        detectron2==0.6 \
                         -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.8/index.html
 
                     echo "=============================="
@@ -122,10 +162,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 4. Verify Python Application
-        // =====================================================
+        // =========================================================
+        // 4. VERIFY PYTHON APPLICATION
+        // =========================================================
         stage('Verify Application') {
+
             steps {
 
                 sh '''
@@ -140,11 +181,21 @@ pipeline {
                     python --version
 
                     echo "=============================="
-                    echo "Testing Application Import"
+                    echo "Testing PyTorch"
                     echo "=============================="
 
                     python -c "import torch; print('Torch:', torch.__version__)"
+
+                    echo "=============================="
+                    echo "Testing TorchVision"
+                    echo "=============================="
+
                     python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+
+                    echo "=============================="
+                    echo "Testing Detectron2"
+                    echo "=============================="
+
                     python -c "import detectron2; print('Detectron2 imported successfully')"
 
                     echo "=============================="
@@ -157,30 +208,53 @@ pipeline {
 
                     echo "Application PID: $APP_PID"
 
-                    echo "Waiting for application..."
+                    echo "Waiting for application startup..."
 
-                    sleep 15
+                    sleep 10
 
                     echo "=============================="
-                    echo "Application Process"
+                    echo "Checking Application Process"
                     echo "=============================="
 
-                    ps -ef | grep app.py | grep -v grep || true
+                    if kill -0 $APP_PID 2>/dev/null; then
+
+                        echo "Application is running"
+
+                    else
+
+                        echo "Application failed to start"
+
+                        echo "=============================="
+                        echo "Application Logs"
+                        echo "=============================="
+
+                        cat app.log
+
+                        exit 1
+
+                    fi
 
                     echo "=============================="
                     echo "Application Logs"
                     echo "=============================="
 
                     cat app.log || true
+
+                    echo "=============================="
+                    echo "Stopping test application"
+                    echo "=============================="
+
+                    kill $APP_PID 2>/dev/null || true
                 '''
             }
         }
 
 
-        // =====================================================
-        // 5. SonarQube Analysis
-        // =====================================================
+        // =========================================================
+        // 5. SONARQUBE ANALYSIS
+        // =========================================================
         stage('SonarQube Analysis') {
+
             steps {
 
                 withSonarQubeEnv('SonarQubeHAD') {
@@ -197,30 +271,45 @@ pipeline {
                             -Dsonar.projectName=had \
                             -Dsonar.sources=src,app.py \
                             -Dsonar.exclusions="**/*.ipynb,**/*.mp4,**/*.lock,models/**,images/**,dist/**,*.egg-info/**"
+
+                        echo "=============================="
+                        echo "SonarQube Analysis Completed"
+                        echo "=============================="
                     '''
                 }
             }
         }
 
 
-        // =====================================================
-        // 6. Quality Gate
-        // =====================================================
+        // =========================================================
+        // 6. QUALITY GATE
+        // =========================================================
         stage('Quality Gate') {
+
             steps {
 
-                timeout(time: 5, unit: 'MINUTES') {
+                echo "Waiting for SonarQube Quality Gate..."
 
-                    waitForQualityGate abortPipeline: true
+                timeout(
+                    time: 5,
+                    unit: 'MINUTES'
+                ) {
+
+                    waitForQualityGate(
+                        abortPipeline: true
+                    )
                 }
+
+                echo "SonarQube Quality Gate Passed"
             }
         }
 
 
-        // =====================================================
-        // 7. Build Docker Image
-        // =====================================================
+        // =========================================================
+        // 7. BUILD DOCKER IMAGE
+        // =========================================================
         stage('Build Docker Image') {
+
             steps {
 
                 sh '''
@@ -229,6 +318,9 @@ pipeline {
                     echo "=============================="
                     echo "Building Docker Image"
                     echo "=============================="
+
+                    echo "Image:"
+                    echo "${IMAGE_NAME}:${IMAGE_TAG}"
 
                     docker build \
                         -t ${IMAGE_NAME}:${IMAGE_TAG} .
@@ -243,10 +335,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 8. Push Docker Image to ACR
-        // =====================================================
+        // =========================================================
+        // 8. PUSH DOCKER IMAGE TO ACR
+        // =========================================================
         stage('Push Docker Image to ACR') {
+
             steps {
 
                 withCredentials([
@@ -261,15 +354,17 @@ pipeline {
                         set -e
 
                         echo "=============================="
-                        echo "Login to ACR"
+                        echo "Logging in to ACR"
                         echo "=============================="
 
                         echo "$ACR_PASSWORD" | docker login ${ACR_LOGIN_SERVER} \
                             -u "$ACR_USERNAME" \
                             --password-stdin
 
+                        echo "ACR login successful"
+
                         echo "=============================="
-                        echo "Tagging Image"
+                        echo "Tagging Docker Image"
                         echo "=============================="
 
                         docker tag \
@@ -277,13 +372,16 @@ pipeline {
                             ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}
 
                         echo "=============================="
-                        echo "Pushing Image"
+                        echo "Pushing Docker Image"
                         echo "=============================="
 
                         docker push \
                             ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}
 
-                        echo "Image pushed successfully:"
+                        echo "=============================="
+                        echo "Image pushed successfully"
+                        echo "=============================="
+
                         echo "${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}"
                     '''
                 }
@@ -291,10 +389,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 9. Stop Old Container
-        // =====================================================
+        // =========================================================
+        // 9. STOP OLD CONTAINER
+        // =========================================================
         stage('Stop Old Container') {
+
             steps {
 
                 sh '''
@@ -312,10 +411,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 10. Create Docker Volume
-        // =====================================================
+        // =========================================================
+        // 10. CREATE DOCKER VOLUME
+        // =========================================================
         stage('Create Docker Volume') {
+
             steps {
 
                 sh '''
@@ -346,10 +446,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 11. Run Updated Container
-        // =====================================================
+        // =========================================================
+        // 11. RUN UPDATED CONTAINER
+        // =========================================================
         stage('Run Updated Container') {
+
             steps {
 
                 sh '''
@@ -375,10 +476,11 @@ pipeline {
         }
 
 
-        // =====================================================
-        // 12. Verify Container
-        // =====================================================
+        // =========================================================
+        // 12. VERIFY CONTAINER
+        // =========================================================
         stage('Verify Container') {
+
             steps {
 
                 sh '''
@@ -402,6 +504,26 @@ pipeline {
                     echo "=============================="
 
                     docker logs ${CONTAINER_NAME}
+
+                    echo "=============================="
+                    echo "Checking Container State"
+                    echo "=============================="
+
+                    RUNNING=$(docker inspect \
+                        -f '{{.State.Running}}' \
+                        ${CONTAINER_NAME})
+
+                    if [ "$RUNNING" = "true" ]; then
+
+                        echo "Container is running successfully"
+
+                    else
+
+                        echo "Container is NOT running"
+
+                        exit 1
+
+                    fi
                 '''
             }
         }
@@ -409,21 +531,41 @@ pipeline {
 
 
     // =========================================================
-    // Post Actions
+    // POST ACTIONS
     // =========================================================
     post {
 
         success {
-            echo '================================'
-            echo 'CI/CD Pipeline Successful'
-            echo '================================'
-            echo "Docker Image: ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}"
+
+            echo "========================================"
+            echo "CI/CD PIPELINE SUCCESSFUL"
+            echo "========================================"
+
+            echo "Build Number: ${BUILD_NUMBER}"
+
+            echo "Docker Image:"
+            echo "${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}"
+
+            echo "Container:"
+            echo "${CONTAINER_NAME}"
         }
 
         failure {
-            echo '================================'
-            echo 'CI/CD Pipeline Failed'
-            echo '================================'
+
+            echo "========================================"
+            echo "CI/CD PIPELINE FAILED"
+            echo "========================================"
+
+            echo "Build Number: ${BUILD_NUMBER}"
+
+            echo "Check the failed stage above."
+        }
+
+        always {
+
+            echo "========================================"
+            echo "Pipeline Completed"
+            echo "========================================"
         }
     }
 }
