@@ -2,306 +2,211 @@ pipeline {
 
     agent any
 
-    options {
-        skipDefaultCheckout(true)
-        timestamps()
-    }
-
     environment {
 
-        // =====================================================
-        // Python 3.7.17
-        // CHANGE THIS PATH IF YOUR PYTHON IS INSTALLED ELSEWHERE
-        // =====================================================
-        PYTHON = "C:\\Python37\\python.exe"
+        // Python selected through pyenv
+        PYTHON = "/home/sanju/.pyenv/versions/3.7.17/bin/python"
 
-        // =====================================================
-        // Docker
-        // =====================================================
         IMAGE_NAME = "had"
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         CONTAINER_NAME = "had-app"
         VOLUME_NAME = "had-venv"
 
-        // =====================================================
-        // ACR
-        // =====================================================
         ACR_LOGIN_SERVER = "teammaverick.azurecr.io"
     }
 
     stages {
 
-        // =====================================================
-        // 1. CHECKOUT
-        // =====================================================
         stage('Checkout') {
-
             steps {
+                checkout scm
 
-                echo "========================================"
-                echo "Checking out source code"
-                echo "========================================"
+                sh '''
+                    set -e
 
-                git(
-                    branch: 'main',
-                    url: 'https://github.com/sanjugm/Human-Activity-Detection.git'
-                )
-
-                bat '''
-                    echo ========================================
-                    echo Git Information
-                    echo ========================================
+                    echo "=============================="
+                    echo "Git Information"
+                    echo "=============================="
 
                     git branch --show-current
                     git rev-parse HEAD
 
-                    echo.
-                    echo ========================================
-                    echo Project Files
-                    echo ========================================
+                    echo "=============================="
+                    echo "Project Files"
+                    echo "=============================="
 
-                    dir
+                    ls -la
                 '''
             }
         }
 
-
-        // =====================================================
-        // 2. CREATE VIRTUAL ENVIRONMENT
-        // =====================================================
         stage('Create Virtual Environment') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Python Version
-                    echo ========================================
+                    echo "=============================="
+                    echo "Python Version"
+                    echo "=============================="
 
-                    "%PYTHON%" --version
+                    ${PYTHON} --version
 
-                    echo.
-                    echo ========================================
-                    echo Removing Old Virtual Environment
-                    echo ========================================
+                    echo "=============================="
+                    echo "Creating Virtual Environment"
+                    echo "=============================="
 
-                    if exist venv (
-                        rmdir /s /q venv
-                    )
+                    rm -rf .venv
 
-                    echo.
-                    echo ========================================
-                    echo Creating Virtual Environment
-                    echo ========================================
+                    ${PYTHON} -m venv .venv
 
-                    "%PYTHON%" -m venv venv
+                    . .venv/bin/activate
 
-                    echo.
-                    echo Virtual environment created.
-
-                    venv\\Scripts\\python.exe --version
-                    venv\\Scripts\\pip.exe --version
+                    python --version
+                    python -m pip --version
                 '''
             }
         }
 
-
-        // =====================================================
-        // 3. INSTALL DEPENDENCIES
-        // =====================================================
         stage('Install Dependencies') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Installing requirements.txt
-                    echo ========================================
+                    . .venv/bin/activate
 
-                    venv\\Scripts\\pip.exe install ^
-                        --no-cache-dir ^
-                        --default-timeout=1000 ^
+                    echo "=============================="
+                    echo "Installing Dependencies"
+                    echo "=============================="
+
+                    python -m pip install \
+                        --no-cache-dir \
                         -r requirements.txt
 
-                    echo.
-                    echo ========================================
-                    echo Installing six
-                    echo ========================================
+                    echo "=============================="
+                    echo "Dependencies Installed"
+                    echo "=============================="
 
-                    venv\\Scripts\\pip.exe install ^
-                        --no-cache-dir ^
-                        six
-
-                    echo.
-                    echo ========================================
-                    echo Installing Detectron2
-                    echo ========================================
-
-                    venv\\Scripts\\pip.exe install ^
-                        --no-cache-dir ^
-                        --default-timeout=1000 ^
-                        detectron2==0.6 ^
-                        -f https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.8/index.html
-
-                    echo.
-                    echo ========================================
-                    echo Installed Packages
-                    echo ========================================
-
-                    venv\\Scripts\\pip.exe list
+                    python -m pip list
                 '''
             }
         }
 
-
-        // =====================================================
-        // 4. VERIFY PYTHON APPLICATION
-        // =====================================================
         stage('Verify Application') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Python Version
-                    echo ========================================
+                    . .venv/bin/activate
 
-                    venv\\Scripts\\python.exe --version
+                    echo "=============================="
+                    echo "Python"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Testing PyTorch
-                    echo ========================================
+                    python --version
 
-                    venv\\Scripts\\python.exe -c "import torch; print('Torch:', torch.__version__)"
+                    echo "=============================="
+                    echo "PyTorch"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Testing TorchVision
-                    echo ========================================
+                    python -c "import torch; print('Torch:', torch.__version__)"
 
-                    venv\\Scripts\\python.exe -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+                    echo "=============================="
+                    echo "TorchVision"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Testing Detectron2
-                    echo ========================================
+                    python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
 
-                    venv\\Scripts\\python.exe -c "import detectron2; print('Detectron2 imported successfully')"
+                    echo "=============================="
+                    echo "six"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Starting Flask Application
-                    echo ========================================
+                    python -c "import six; print('six:', six.__version__)"
 
-                    start "" /B venv\\Scripts\\python.exe app.py > app.log 2>&1
+                    echo "=============================="
+                    echo "Detectron2"
+                    echo "=============================="
 
-                    echo Application started.
+                    python -c "import detectron2; print('Detectron2: OK')"
 
-                    timeout /t 10 /nobreak
+                    echo "=============================="
+                    echo "Starting Application"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Application Logs
-                    echo ========================================
+                    nohup python app.py > app.log 2>&1 &
 
-                    type app.log
+                    APP_PID=$!
+
+                    echo "Application PID: ${APP_PID}"
+
+                    sleep 10
+
+                    if kill -0 ${APP_PID} 2>/dev/null; then
+                        echo "Application started successfully"
+                    else
+                        echo "Application failed to start"
+                        cat app.log
+                        exit 1
+                    fi
+
+                    echo "=============================="
+                    echo "Application Logs"
+                    echo "=============================="
+
+                    cat app.log || true
+
+                    kill ${APP_PID} 2>/dev/null || true
                 '''
             }
         }
 
-
-        // =====================================================
-        // 5. SONARQUBE ANALYSIS
-        // =====================================================
         stage('SonarQube Analysis') {
-
             steps {
-
                 withSonarQubeEnv('SonarQubeHAD') {
+                    sh '''
+                        set -e
 
-                    bat '''
-                        echo ========================================
-                        echo SonarQube Analysis
-                        echo ========================================
+                        echo "=============================="
+                        echo "SonarQube Analysis"
+                        echo "=============================="
 
-                        sonar-scanner.bat ^
-                            -Dsonar.projectKey=had ^
-                            -Dsonar.projectName=had ^
-                            -Dsonar.sources=src,app.py ^
+                        /opt/sonar-scanner/bin/sonar-scanner \
+                            -Dsonar.projectKey=had \
+                            -Dsonar.projectName=had \
+                            -Dsonar.sources=src,app.py \
                             -Dsonar.exclusions="**/*.ipynb,**/*.mp4,**/*.lock,models/**,images/**,dist/**,*.egg-info/**"
-
-                        echo.
-                        echo ========================================
-                        echo SonarQube Analysis Completed
-                        echo ========================================
                     '''
                 }
             }
         }
 
-
-        // =====================================================
-        // 6. QUALITY GATE
-        // =====================================================
         stage('Quality Gate') {
-
             steps {
-
-                echo "Waiting for SonarQube Quality Gate..."
-
-                timeout(
-                    time: 5,
-                    unit: 'MINUTES'
-                ) {
-
-                    waitForQualityGate(
-                        abortPipeline: true
-                    )
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
-
-                echo "SonarQube Quality Gate Passed"
             }
         }
 
-
-        // =====================================================
-        // 7. BUILD DOCKER IMAGE
-        // =====================================================
         stage('Build Docker Image') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Building Docker Image
-                    echo ========================================
+                    echo "=============================="
+                    echo "Building Docker Image"
+                    echo "=============================="
 
-                    echo Image:
-                    echo %IMAGE_NAME%:%IMAGE_TAG%
+                    docker build \
+                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
 
-                    docker build ^
-                        -t %IMAGE_NAME%:%IMAGE_TAG% .
-
-                    echo.
-                    echo ========================================
-                    echo Docker Image Created
-                    echo ========================================
-
-                    docker images %IMAGE_NAME%
+                    docker images ${IMAGE_NAME}
                 '''
             }
         }
 
-
-        // =====================================================
-        // 8. PUSH IMAGE TO ACR
-        // =====================================================
         stage('Push Docker Image to ACR') {
-
             steps {
-
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'acr-service-principal',
@@ -309,201 +214,141 @@ pipeline {
                         passwordVariable: 'ACR_PASSWORD'
                     )
                 ]) {
+                    sh '''
+                        set -e
 
-                    bat '''
-                        echo ========================================
-                        echo Login to Azure Container Registry
-                        echo ========================================
+                        echo "=============================="
+                        echo "Login to ACR"
+                        echo "=============================="
 
-                        docker login %ACR_LOGIN_SERVER% ^
-                            -u "%ACR_USERNAME%" ^
-                            -p "%ACR_PASSWORD%"
+                        echo "$ACR_PASSWORD" | docker login ${ACR_LOGIN_SERVER} \
+                            -u "$ACR_USERNAME" \
+                            --password-stdin
 
-                        echo.
-                        echo ACR login successful.
+                        echo "=============================="
+                        echo "Tagging Image"
+                        echo "=============================="
 
-                        echo ========================================
-                        echo Tagging Docker Image
-                        echo ========================================
+                        docker tag \
+                            ${IMAGE_NAME}:${IMAGE_TAG} \
+                            ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}
 
-                        docker tag ^
-                            %IMAGE_NAME%:%IMAGE_TAG% ^
-                            %ACR_LOGIN_SERVER%/had:%IMAGE_TAG%
+                        echo "=============================="
+                        echo "Pushing Image"
+                        echo "=============================="
 
-                        echo.
-                        echo ========================================
-                        echo Pushing Docker Image
-                        echo ========================================
-
-                        docker push ^
-                            %ACR_LOGIN_SERVER%/had:%IMAGE_TAG%
-
-                        echo.
-                        echo ========================================
-                        echo Image pushed successfully
-                        echo ========================================
-
-                        echo %ACR_LOGIN_SERVER%/had:%IMAGE_TAG%
+                        docker push \
+                            ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}
                     '''
                 }
             }
         }
 
-
-        // =====================================================
-        // 9. STOP OLD CONTAINER
-        // =====================================================
         stage('Stop Old Container') {
-
             steps {
+                sh '''
+                    set +e
 
-                bat '''
-                    echo ========================================
-                    echo Stopping Old Container
-                    echo ========================================
+                    echo "Stopping old container..."
 
-                    docker rm -f %CONTAINER_NAME% 2>nul
-
-                    echo Old container removed if it existed.
+                    docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
                 '''
             }
         }
 
-
-        // =====================================================
-        // 10. CREATE DOCKER VOLUME
-        // =====================================================
         stage('Create Docker Volume') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Checking Docker Volume
-                    echo ========================================
-
-                    docker volume inspect %VOLUME_NAME% >nul 2>&1
-
-                    if %ERRORLEVEL% EQU 0 (
-
-                        echo Docker volume "%VOLUME_NAME%" already exists.
-
-                    ) else (
-
-                        echo Creating Docker volume "%VOLUME_NAME%".
-
-                        docker volume create %VOLUME_NAME%
-                    )
-
-                    echo.
-                    echo ========================================
-                    echo Docker Volumes
-                    echo ========================================
-
-                    docker volume ls
+                    if docker volume inspect ${VOLUME_NAME} >/dev/null 2>&1; then
+                        echo "Volume ${VOLUME_NAME} already exists"
+                    else
+                        echo "Creating volume ${VOLUME_NAME}"
+                        docker volume create ${VOLUME_NAME}
+                    fi
                 '''
             }
         }
 
-
-        // =====================================================
-        // 11. RUN UPDATED CONTAINER
-        // =====================================================
         stage('Run Updated Container') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Starting Updated Container
-                    echo ========================================
+                    echo "=============================="
+                    echo "Starting Container"
+                    echo "=============================="
 
-                    docker run -d ^
-                        --name %CONTAINER_NAME% ^
-                        -p 5000:5000 ^
-                        -v %VOLUME_NAME%:/app/.venv ^
-                        %IMAGE_NAME%:%IMAGE_TAG%
-
-                    echo.
-                    echo ========================================
-                    echo Container Started
-                    echo ========================================
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        -p 5000:5000 \
+                        -v ${VOLUME_NAME}:/app/.venv \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
 
                     docker ps
                 '''
             }
         }
 
-
-        // =====================================================
-        // 12. VERIFY CONTAINER
-        // =====================================================
         stage('Verify Container') {
-
             steps {
+                sh '''
+                    set -e
 
-                bat '''
-                    echo ========================================
-                    echo Waiting for Container
-                    echo ========================================
+                    sleep 10
 
-                    timeout /t 10 /nobreak
+                    echo "=============================="
+                    echo "Container Status"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Container Status
-                    echo ========================================
+                    docker ps -a \
+                        --filter "name=${CONTAINER_NAME}"
 
-                    docker ps -a --filter "name=%CONTAINER_NAME%"
+                    echo "=============================="
+                    echo "Container Logs"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Container Logs
-                    echo ========================================
+                    docker logs ${CONTAINER_NAME}
 
-                    docker logs %CONTAINER_NAME%
+                    echo "=============================="
+                    echo "Container State"
+                    echo "=============================="
 
-                    echo.
-                    echo ========================================
-                    echo Checking Container
-                    echo ========================================
+                    RUNNING=$(docker inspect \
+                        -f '{{.State.Running}}' \
+                        ${CONTAINER_NAME})
 
-                    docker inspect %CONTAINER_NAME% ^
-                        --format="{{.State.Running}}"
+                    if [ "$RUNNING" = "true" ]; then
+                        echo "Container is running successfully"
+                    else
+                        echo "Container is NOT running"
+                        exit 1
+                    fi
                 '''
             }
         }
     }
 
-
-    // =========================================================
-    // POST ACTIONS
-    // =========================================================
     post {
 
         success {
-
             echo "========================================"
             echo "CI/CD PIPELINE SUCCESSFUL"
             echo "========================================"
 
             echo "Build Number: ${BUILD_NUMBER}"
-            echo "Docker Image: ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}"
+            echo "Image: ${ACR_LOGIN_SERVER}/had:${IMAGE_TAG}"
             echo "Container: ${CONTAINER_NAME}"
         }
 
         failure {
-
             echo "========================================"
             echo "CI/CD PIPELINE FAILED"
             echo "========================================"
-
-            echo "Build Number: ${BUILD_NUMBER}"
-            echo "Check the failed stage above."
         }
 
         always {
-
             echo "========================================"
             echo "Pipeline Completed"
             echo "========================================"
