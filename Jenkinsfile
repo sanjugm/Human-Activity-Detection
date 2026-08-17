@@ -3,7 +3,7 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = "/home/azureuser/.pyenv/versions/3.7.17/bin/python"
+        PYTHON = "/opt/python37/bin/python"
     }
 
     options {
@@ -35,7 +35,6 @@ pipeline {
             }
         }
 
-
         stage('Check Python') {
             steps {
                 sh '''
@@ -45,12 +44,11 @@ pipeline {
 
                     ${PYTHON} --version
 
-                    echo "Python Path:"
-                    which ${PYTHON}
+                    echo "Python Location:"
+                    ${PYTHON} -c "import sys; print(sys.executable)"
                 '''
             }
         }
-
 
         stage('Create Virtual Environment') {
             steps {
@@ -63,14 +61,11 @@ pipeline {
 
                     ${PYTHON} -m venv .venv
 
-                    echo "Virtual Environment Created"
-
                     .venv/bin/python --version
                     .venv/bin/pip --version
                 '''
             }
         }
-
 
         stage('Install Dependencies') {
             steps {
@@ -104,19 +99,23 @@ pipeline {
             }
         }
 
-
         stage('Run Application') {
             steps {
                 sh '''
+                    set -e
+
                     echo "========================================"
                     echo "Starting Flask Application"
                     echo "========================================"
 
-                    rm -f app.log
+                    rm -f app.log app.pid
 
                     .venv/bin/python app.py > app.log 2>&1 &
 
                     echo $! > app.pid
+
+                    echo "Application PID:"
+                    cat app.pid
 
                     sleep 15
 
@@ -129,10 +128,11 @@ pipeline {
             }
         }
 
-
         stage('Verify Application') {
             steps {
                 sh '''
+                    set -e
+
                     echo "========================================"
                     echo "Verifying Application"
                     echo "========================================"
@@ -141,7 +141,7 @@ pipeline {
                     then
                         echo "Flask application is running"
                     else
-                        echo "Flask application failed"
+                        echo "Flask application failed to start"
                         cat app.log
                         exit 1
                     fi
@@ -150,23 +150,14 @@ pipeline {
                     echo "Testing Port 5000"
                     echo "========================================"
 
-                    curl -f http://127.0.0.1:5000/ || {
+                    curl -f http://127.0.0.1:5000/
 
-                        echo "Application is not responding"
-
-                        cat app.log
-
-                        exit 1
-                    }
-
-                    echo "========================================"
-                    echo "Application Verification Successful"
-                    echo "========================================"
+                    echo ""
+                    echo "Application verification successful"
                 '''
             }
         }
     }
-
 
     post {
 
