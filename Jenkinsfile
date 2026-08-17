@@ -1,7 +1,8 @@
 pipeline {
 
-    agent any
-
+agent {
+        label 'linux-wsl'
+    }
     environment {
 
         // CHANGE THIS ONLY if your Python 3.7 path is different
