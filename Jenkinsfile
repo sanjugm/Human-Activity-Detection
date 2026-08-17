@@ -1,123 +1,203 @@
 pipeline {
+
     agent any
+
     environment {
-        PATH = "$HOME/.local/bin:$PATH"
-        IMAGE_NAME = "had"
-        CONTAINER_NAME = "had-app"
-        VOLUME_NAME = "had-venv"
+        PYTHON = "/home/azureuser/.pyenv/versions/3.7.17/bin/python"
     }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
     stages {
-        stage('Build Python .Whl file') {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+
+                sh '''
+                    echo "========================================"
+                    echo "Git Information"
+                    echo "========================================"
+
+                    git --version
+                    git branch --show-current
+                    git rev-parse HEAD
+
+                    echo "========================================"
+                    echo "Project Files"
+                    echo "========================================"
+
+                    ls -la
+                '''
+            }
+        }
+
+
+        stage('Check Python') {
             steps {
                 sh '''
-                    set -eux
-                    curl -LsSf https://astral.sh/uv/install.sh | sh
-                    uv python install 3.10
-                    which python3.10 
-                    python3.10 --version
-                    rm -rf .venv
-                    uv venv --python 3.10
-                    rm -rf dist build *.egg-info
-                    uv build
+                    echo "========================================"
+                    echo "Python Version"
+                    echo "========================================"
+
+                    ${PYTHON} --version
+
+                    echo "Python Path:"
+                    which ${PYTHON}
                 '''
-                script {
-                    env.IMAGE_TAG = sh(
-                        script: '''
-                            sed -n 's/^version = "\\([^"]*\\)"/\\1/p' pyproject.toml
-                        ''',
-                        returnStdout: true
-                    ).trim()
-                    if (!env.IMAGE_TAG) {
-                        error "Version not found in pyproject.toml"
+            }
+        }
+
+
+        stage('Create Virtual Environment') {
+            steps {
+                sh '''
+                    echo "========================================"
+                    echo "Creating Virtual Environment"
+                    echo "========================================"
+
+                    rm -rf .venv
+
+                    ${PYTHON} -m venv .venv
+
+                    echo "Virtual Environment Created"
+
+                    .venv/bin/python --version
+                    .venv/bin/pip --version
+                '''
+            }
+        }
+
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "========================================"
+                    echo "Installing Dependencies"
+                    echo "========================================"
+
+                    .venv/bin/python -m pip install --upgrade "pip<24"
+
+                    .venv/bin/pip install \
+                        --no-cache-dir \
+                        -r requirements.txt
+
+                    echo "========================================"
+                    echo "Checking Packages"
+                    echo "========================================"
+
+                    .venv/bin/python -c "import torch; print('Torch:', torch.__version__)"
+
+                    .venv/bin/python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+
+                    .venv/bin/python -c "import six; print('six:', six.__version__)"
+
+                    .venv/bin/python -c "import cv2; print('OpenCV:', cv2.__version__)"
+
+                    .venv/bin/python -c "import detectron2; print('Detectron2: OK')"
+                '''
+            }
+        }
+
+
+        stage('Run Application') {
+            steps {
+                sh '''
+                    echo "========================================"
+                    echo "Starting Flask Application"
+                    echo "========================================"
+
+                    rm -f app.log
+
+                    .venv/bin/python app.py > app.log 2>&1 &
+
+                    echo $! > app.pid
+
+                    sleep 15
+
+                    echo "========================================"
+                    echo "Application Logs"
+                    echo "========================================"
+
+                    cat app.log
+                '''
+            }
+        }
+
+
+        stage('Verify Application') {
+            steps {
+                sh '''
+                    echo "========================================"
+                    echo "Verifying Application"
+                    echo "========================================"
+
+                    if kill -0 $(cat app.pid) 2>/dev/null
+                    then
+                        echo "Flask application is running"
+                    else
+                        echo "Flask application failed"
+                        cat app.log
+                        exit 1
+                    fi
+
+                    echo "========================================"
+                    echo "Testing Port 5000"
+                    echo "========================================"
+
+                    curl -f http://127.0.0.1:5000/ || {
+
+                        echo "Application is not responding"
+
+                        cat app.log
+
+                        exit 1
                     }
 
-            echo "Application version: ${env.IMAGE_TAG}"
-            }
-        }
-        }
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQubeHAD') {
-                    sh '''
-                    /opt/sonar-scanner/bin/sonar-scanner \
-                -Dsonar.projectKey=had \
-                  -Dsonar.projectName=had \
-                  -Dsonar.sources=src,app.py \
-                  -Dsonar.exclusions="*/.ipynb,*/.mp4,*/.lock,models/*,images/,dist/,.egg-info/**"
-
-                    '''
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                    docker build \
-                        -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    echo "========================================"
+                    echo "Application Verification Successful"
+                    echo "========================================"
                 '''
             }
         }
-        stage('Push Docker Image to ACR') {
-    steps {
-        withCredentials([
-                    usernamePassword(
-                        credentialsId: 'acr-service-principal',
-                        usernameVariable: 'ACR_USERNAME',
-                        passwordVariable: 'ACR_PASSWORD'
-            )
-        ]) {
+    }
+
+
+    post {
+
+        always {
             sh '''
-                set -e
-
-                echo "$ACR_PASSWORD" | docker login teammaverick.azurecr.io \
-                    -u "$ACR_USERNAME" \
-                    --password-stdin
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} teammaverick.azurecr.io/had:${IMAGE_TAG}
-
-                docker push teammaverick.azurecr.io/had:${IMAGE_TAG}
+                if [ -f app.pid ]; then
+                    kill $(cat app.pid) 2>/dev/null || true
+                fi
             '''
+
+            echo '''
+========================================
+Pipeline Completed
+========================================
+'''
         }
-    }
-}
-        stage('Stop Old Container') {
-            steps {
-                sh '''
-                    docker rm -f ${CONTAINER_NAME} || true
-                    echo "Removing previous stopped container..."
-                    docker rm -f had-app 2>/dev/null || true
-                '''
-            }
+
+        success {
+            echo '''
+========================================
+CI PIPELINE SUCCESSFUL
+========================================
+'''
         }
-        stage('Create Docker Volume') {
-    steps {
-        sh '''
-            if docker volume inspect had-venv >/dev/null 2>&1; then
-                echo "Docker volume 'had-venv' already exists"
-            else
-                echo "Creating Docker volume 'had-venv'"
-                docker volume create had-venv
-            fi
-        '''
-    }
-}
-                stage('Run Updated Container') {
-            steps {
-                sh '''
-                    docker run -d \
-                        --name ${CONTAINER_NAME} \
-                        -p 5000:5000 \
-                        -v ${VOLUME_NAME}:/app/.venv \
-                        ${IMAGE_NAME}:${IMAGE_TAG}
-                '''
-            }
+
+        failure {
+            echo '''
+========================================
+CI PIPELINE FAILED
+========================================
+'''
         }
     }
 }
