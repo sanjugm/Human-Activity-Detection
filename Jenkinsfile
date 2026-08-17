@@ -67,41 +67,41 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh '''
-                    set -e
+       stage('Install Dependencies') {
+    steps {
+        sh '''
+            set -e
 
-                    echo "========================================"
-                    echo "Installing Dependencies"
-                    echo "========================================"
+            echo "========================================"
+            echo "Installing Dependencies"
+            echo "========================================"
 
-                    .venv/bin/python -m pip install --upgrade "pip<24"
-                     .venv/bin/pip install --no-cache-dir -r requirements.txt
-                     .venv/bin/pip install six
+            .venv/bin/python -m pip install --upgrade "pip<24"
 
-                    .venv/bin/pip install \
-                        --no-cache-dir \
-                        -r requirements.txt
+            echo "Installing requirements.txt"
+            .venv/bin/pip install --no-cache-dir -r requirements.txt
 
-                    echo "========================================"
-                    echo "Checking Packages"
-                    echo "========================================"
+            echo "Installing six"
+            .venv/bin/pip install --no-cache-dir six
 
-                    .venv/bin/python -c "import torch; print('Torch:', torch.__version__)"
+            echo "========================================"
+            echo "Checking Packages"
+            echo "========================================"
+
+            .venv/bin/python -c "import torch; print('Torch:', torch.__version__)"
+
             .venv/bin/python -c "import six; print('six:', six.__version__)"
 
-                    .venv/bin/python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
+            .venv/bin/python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
 
-                    .venv/bin/python -c "import six; print('six:', six.__version__)"
+            .venv/bin/python -c "import cv2; print('OpenCV:', cv2.__version__)"
 
-                    .venv/bin/python -c "import cv2; print('OpenCV:', cv2.__version__)"
+            echo "Checking Detectron2"
 
-                    .venv/bin/python -c "import detectron2; print('Detectron2: OK')"
-                '''
-            }
-        }
-
+            .venv/bin/python -c "import detectron2; print('Detectron2: OK')"
+        '''
+    }
+}
         stage('Run Application') {
             steps {
                 sh '''
