@@ -9,3 +9,5 @@ torchtext==0.9.1
 pytorch-lightning==1.5.10
 PyYAML==5.4.1
 Werkzeug==2.0.3
+six==1.17.0
+detectron2==0.6
