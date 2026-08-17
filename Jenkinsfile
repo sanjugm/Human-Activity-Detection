@@ -4,7 +4,7 @@ pipeline {
 
     environment {
         PYTHON = "/opt/python37/bin/python"
-    }
+    } 
 
     options {
         skipDefaultCheckout(true)
@@ -77,6 +77,8 @@ pipeline {
                     echo "========================================"
 
                     .venv/bin/python -m pip install --upgrade "pip<24"
+                     .venv/bin/pip install --no-cache-dir -r requirements.txt
+                     .venv/bin/pip install six
 
                     .venv/bin/pip install \
                         --no-cache-dir \
@@ -87,6 +89,7 @@ pipeline {
                     echo "========================================"
 
                     .venv/bin/python -c "import torch; print('Torch:', torch.__version__)"
+            .venv/bin/python -c "import six; print('six:', six.__version__)"
 
                     .venv/bin/python -c "import torchvision; print('TorchVision:', torchvision.__version__)"
 
