@@ -2,7 +2,7 @@ trigger:
   - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'B13-pool'
 
 variables:
   artifactVersion: '1.0.$(Build.BuildId)'
