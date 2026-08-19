@@ -21,48 +21,49 @@ stages:
 
 - stage: Gitleaks
   displayName: 'Gitleaks'
+
   jobs:
   - job: GitleaksScan
     displayName: 'Secret Scan'
+
     steps:
+
     - checkout: self
       fetchDepth: 0
 
     - bash: |
         set -e
-        GITLEAKS_VERSION='8.24.2'
-        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+
+        curl -sSfL \
+          "https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz" \
+          -o gitleaks.tar.gz
+
         tar -xzf gitleaks.tar.gz
+
         sudo mv gitleaks /usr/local/bin/gitleaks
-        gitleaks version
       displayName: 'Install Gitleaks'
 
     - bash: |
         set -e
-        mkdir -p "$(Build.ArtifactStagingDirectory)/gitleaks"
+
         gitleaks detect \
           --source "$(Build.SourcesDirectory)" \
-          --redact \
-          --report-format sarif \
-          --report-path "$(Build.ArtifactStagingDirectory)/gitleaks/gitleaks.sarif"
+          --redact
       displayName: 'Scan for Secrets'
 
-    - task: PublishPipelineArtifact@1
-      displayName: 'Publish Gitleaks Report'
-      condition: always()
-      inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)/gitleaks'
-        artifact: 'Gitleaks-Report'
-        publishLocation: 'pipeline'
 
 - stage: SonarCloud
   displayName: 'SonarCloud'
+
   dependsOn: Gitleaks
   condition: succeeded()
+
   jobs:
   - job: SonarAnalysis
     displayName: 'Code Analysis and Quality Gate'
+
     steps:
+
     - checkout: self
       fetchDepth: 0
 
@@ -77,9 +78,7 @@ stages:
         cliProjectName: '$(sonarProjectName)'
         cliSources: '.'
         extraProperties: |
-          sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4
           sonar.python.version=3.7
-          sonar.sourceEncoding=UTF-8
 
     - task: SonarCloudAnalyze@4
       displayName: 'Run SonarCloud Analysis'
@@ -89,14 +88,19 @@ stages:
       inputs:
         pollingTimeoutSec: '300'
 
+
 - stage: BuildAndPush
   displayName: 'Build and Push to ACR'
+
   dependsOn: SonarCloud
   condition: succeeded()
+
   jobs:
   - job: DockerBuildPush
     displayName: 'Build Docker Image and Push to ACR'
+
     steps:
+
     - checkout: self
 
     - task: Docker@2
@@ -111,10 +115,7 @@ stages:
           latest
 
     - bash: |
-        echo "========================================"
         echo "Artifact Version: $(artifactVersion)"
-        echo "========================================"
         echo "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
         echo "$(containerRegistry)/$(imageRepository):latest"
-        echo "========================================"
       displayName: 'Show Artifact Version'
