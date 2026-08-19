@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.ipynb
+*.log
+Jenkinsfile
+azure-pipelines.yml
+sample_video.mp4
