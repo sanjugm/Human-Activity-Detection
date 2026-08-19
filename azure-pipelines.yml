@@ -5,59 +5,47 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
+  artifactVersion: '1.0.$(Build.BuildId)'
+
   dockerRegistryServiceConnection: 'ACR-HAD'
   containerRegistry: 'hadacr2026.azurecr.io'
   imageRepository: 'human-activity-detection'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
-  imageTag: '$(Build.BuildId)'
 
   sonarServiceConnection: 'SONARCLOUD-SERVICE'
-  sonarOrganization: 'sanjugm'
-  sonarProjectKey: 'sanjugm_Human-Activity-Detection'
-  sonarProjectName: 'Human-Activity-Detection'
+  sonarOrganization: 'sanjugm-1'
+  sonarProjectKey: 'sanjugm_HAD'
+  sonarProjectName: 'HAD'
 
 stages:
 
-- stage: SecurityAndQuality
-  displayName: 'Security and Code Quality'
-
+- stage: Gitleaks
+  displayName: 'Gitleaks'
   jobs:
-
-  - job: Gitleaks
-    displayName: 'Gitleaks Secret Scan'
-
+  - job: GitleaksScan
+    displayName: 'Secret Scan'
     steps:
-
     - checkout: self
       fetchDepth: 0
 
     - bash: |
         set -e
-
-        GITLEAKS_VERSION="8.24.2"
-
-        curl -sSfL \
-          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-          -o gitleaks.tar.gz
-
+        GITLEAKS_VERSION='8.24.2'
+        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
         tar -xzf gitleaks.tar.gz
-
         sudo mv gitleaks /usr/local/bin/gitleaks
-
         gitleaks version
       displayName: 'Install Gitleaks'
 
     - bash: |
         set -e
-
         mkdir -p "$(Build.ArtifactStagingDirectory)/gitleaks"
-
         gitleaks detect \
           --source "$(Build.SourcesDirectory)" \
           --redact \
           --report-format sarif \
           --report-path "$(Build.ArtifactStagingDirectory)/gitleaks/gitleaks.sarif"
-      displayName: 'Scan Repository for Secrets'
+      displayName: 'Scan for Secrets'
 
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Gitleaks Report'
@@ -67,11 +55,14 @@ stages:
         artifact: 'Gitleaks-Report'
         publishLocation: 'pipeline'
 
-  - job: SonarCloud
-    displayName: 'SonarCloud Analysis'
-
+- stage: SonarCloud
+  displayName: 'SonarCloud'
+  dependsOn: Gitleaks
+  condition: succeeded()
+  jobs:
+  - job: SonarAnalysis
+    displayName: 'Code Analysis and Quality Gate'
     steps:
-
     - checkout: self
       fetchDepth: 0
 
@@ -94,28 +85,19 @@ stages:
       displayName: 'Run SonarCloud Analysis'
 
     - task: SonarCloudPublish@4
-      displayName: 'Publish SonarCloud Quality Gate'
+      displayName: 'Quality Gate'
       inputs:
         pollingTimeoutSec: '300'
 
 - stage: BuildAndPush
-  displayName: 'Build Docker Image and Push to ACR'
-
-  dependsOn: SecurityAndQuality
+  displayName: 'Build and Push to ACR'
+  dependsOn: SonarCloud
   condition: succeeded()
-
   jobs:
-
   - job: DockerBuildPush
-    displayName: 'Docker Build and Push'
-
+    displayName: 'Build Docker Image and Push to ACR'
     steps:
-
     - checkout: self
-
-    - bash: |
-        docker --version
-      displayName: 'Check Docker'
 
     - task: Docker@2
       displayName: 'Build and Push Image to ACR'
@@ -125,53 +107,14 @@ stages:
         repository: '$(imageRepository)'
         dockerfile: '$(dockerfilePath)'
         tags: |
-          $(imageTag)
+          $(artifactVersion)
           latest
 
     - bash: |
         echo "========================================"
-        echo "IMAGE PUSH SUCCESSFUL"
+        echo "Artifact Version: $(artifactVersion)"
         echo "========================================"
-        echo ""
-        echo "Registry: $(containerRegistry)"
-        echo "Repository: $(imageRepository)"
-        echo "Build Tag: $(imageTag)"
-        echo ""
-        echo "$(containerRegistry)/$(imageRepository):$(imageTag)"
+        echo "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
         echo "$(containerRegistry)/$(imageRepository):latest"
         echo "========================================"
-      displayName: 'Display Docker Image Information'
-
-- stage: PipelineSummary
-  displayName: 'Pipeline Summary'
-
-  dependsOn:
-    - SecurityAndQuality
-    - BuildAndPush
-
-  condition: always()
-
-  jobs:
-
-  - job: Summary
-    displayName: 'Pipeline Summary'
-
-    steps:
-
-    - bash: |
-        echo "========================================"
-        echo "        PIPELINE SUMMARY"
-        echo "========================================"
-        echo ""
-        echo "Gitleaks      : Completed"
-        echo "SonarCloud    : Completed"
-        echo "Quality Gate  : Checked"
-        echo "Docker Build  : Completed"
-        echo "ACR Push      : Completed"
-        echo ""
-        echo "ACR Registry  : hadacr2026.azurecr.io"
-        echo "Repository    : human-activity-detection"
-        echo "Image Tag     : $(Build.BuildId)"
-        echo ""
-        echo "========================================"
-      displayName: 'Show Pipeline Summary'
+      displayName: 'Show Artifact Version'
