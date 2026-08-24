@@ -17,8 +17,8 @@ variables:
   sonarProjectKey: 'sanjugm_HAD'
   sonarProjectName: 'HAD'
 
-azureServiceConnection: 'AZURE-HAD'
-aksResourceGroup: 'had-south-rg'
+  azureServiceConnection: 'AZURE-HAD'
+  aksResourceGroup: 'had-south-rg'
   aksCluster: 'had-aks'
 
 
@@ -188,15 +188,15 @@ stages:
       inputs:
         action: 'deploy'
         connectionType: 'azureResourceManager'
-        azureSubscriptionConnection: 'YOUR-ACTUAL-AZURE-SERVICE-CONNECTION-NAME'
-        azureResourceGroup: 'had-south-rg'
-        kubernetesCluster: 'had-aks'
+        azureSubscriptionConnection: '$(azureServiceConnection)'
+        azureResourceGroup: '$(aksResourceGroup)'
+        kubernetesCluster: '$(aksCluster)'
         namespace: 'default'
         manifests: |
           k8s/deployment.yaml
           k8s/service.yaml
         containers: |
-          hadacr2026.azurecr.io/human-activity-detection:$(artifactVersion)
+          $(containerRegistry)/$(imageRepository):$(artifactVersion)
 
     - powershell: |
         kubectl get deployments
