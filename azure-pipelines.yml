@@ -17,9 +17,10 @@ variables:
   sonarProjectKey: 'sanjugm_HAD'
   sonarProjectName: 'HAD'
 
-  azureServiceConnection: 'AZURE-SERVICE-CONNECTION'
-  aksResourceGroup: 'had-south-rg'
+azureServiceConnection: 'Azure-Service-Connection'
+aksResourceGroup: 'had-south-rg'
   aksCluster: 'had-aks'
+
 
 stages:
 
@@ -97,19 +98,19 @@ stages:
 
   jobs:
   - job: SonarAnalysis
-    displayName: 'SonarCloud Analysis'
+    displayName: 'SonarCloud Analysis and Quality Gate'
 
     steps:
 
     - checkout: self
       fetchDepth: 0
 
-    - task: SonarCloudPrepare@4
+    - task: SonarCloudPrepare@4.2.5
       displayName: 'Prepare SonarCloud Analysis'
       inputs:
         SonarCloud: '$(sonarServiceConnection)'
         organization: '$(sonarOrganization)'
-        scannerMode: 'CLI'
+        scannerMode: 'cli'
         configMode: 'manual'
         cliProjectKey: '$(sonarProjectKey)'
         cliProjectName: '$(sonarProjectName)'
@@ -117,14 +118,17 @@ stages:
         extraProperties: |
           sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4,**/node_modules/**
           sonar.sourceEncoding=UTF-8
+          sonar.verbose=true
 
-    - task: SonarCloudAnalyze@4
+    - task: SonarCloudAnalyze@4.2.5
       displayName: 'Run SonarCloud Analysis'
 
-    - task: SonarCloudPublish@4
+    - task: SonarCloudPublish@4.2.5
       displayName: 'Publish Quality Gate'
       inputs:
         pollingTimeoutSec: '300'
+
+
 - stage: BuildAndPush
   displayName: 'Build and Push to ACR'
 
@@ -173,7 +177,7 @@ stages:
 
   jobs:
   - job: DeployToAKS
-    displayName: 'Deploy to AKS'
+    displayName: 'Deploy Application to AKS'
 
     steps:
 
@@ -184,15 +188,15 @@ stages:
       inputs:
         action: 'deploy'
         connectionType: 'azureResourceManager'
-        azureSubscriptionConnection: '$(azureServiceConnection)'
-        azureResourceGroup: '$(aksResourceGroup)'
-        kubernetesCluster: '$(aksCluster)'
+        azureSubscriptionConnection: 'YOUR-ACTUAL-AZURE-SERVICE-CONNECTION-NAME'
+        azureResourceGroup: 'had-south-rg'
+        kubernetesCluster: 'had-aks'
         namespace: 'default'
         manifests: |
           k8s/deployment.yaml
           k8s/service.yaml
         containers: |
-          $(containerRegistry)/$(imageRepository):$(artifactVersion)
+          hadacr2026.azurecr.io/human-activity-detection:$(artifactVersion)
 
     - powershell: |
         kubectl get deployments
