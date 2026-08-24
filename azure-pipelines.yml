@@ -104,12 +104,12 @@ stages:
     - checkout: self
       fetchDepth: 0
 
-    - task: SonarCloudPrepare@4.2.5
+    - task: SonarCloudPrepare@4
       displayName: 'Prepare SonarCloud Analysis'
       inputs:
         SonarCloud: '$(sonarServiceConnection)'
         organization: '$(sonarOrganization)'
-        scannerMode: 'cli'
+        scannerMode: 'CLI'
         configMode: 'manual'
         cliProjectKey: '$(sonarProjectKey)'
         cliProjectName: '$(sonarProjectName)'
@@ -118,15 +118,13 @@ stages:
           sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4,**/node_modules/**
           sonar.sourceEncoding=UTF-8
 
-    - task: SonarCloudAnalyze@4.2.5
+    - task: SonarCloudAnalyze@4
       displayName: 'Run SonarCloud Analysis'
 
-    - task: SonarCloudPublish@4.2.5
-      displayName: 'Quality Gate'
+    - task: SonarCloudPublish@4
+      displayName: 'Publish Quality Gate'
       inputs:
         pollingTimeoutSec: '300'
-
-
 - stage: BuildAndPush
   displayName: 'Build and Push to ACR'
 
