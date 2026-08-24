@@ -17,7 +17,7 @@ variables:
   sonarProjectKey: 'sanjugm_HAD'
   sonarProjectName: 'HAD'
 
-azureServiceConnection: 'Azure-Service-Connection'
+azureServiceConnection: 'AZURE-HAD'
 aksResourceGroup: 'had-south-rg'
   aksCluster: 'had-aks'
 
