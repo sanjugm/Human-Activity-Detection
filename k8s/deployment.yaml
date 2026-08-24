@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: human-activity-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: human-activity-detection
+  template:
+    metadata:
+      labels:
+        app: human-activity-detection
+    spec:
+      containers:
+        - name: human-activity-detection
+          image: hadacr2026.azurecr.io/human-activity-detection:latest
+          ports:
+            - containerPort: 5000
+          imagePullPolicy: Always

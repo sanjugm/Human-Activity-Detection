@@ -17,6 +17,10 @@ variables:
   sonarProjectKey: 'sanjugm_HAD'
   sonarProjectName: 'HAD'
 
+  azureServiceConnection: 'AZURE-SERVICE-CONNECTION'
+  aksResourceGroup: 'had-south-rg'
+  aksCluster: 'had-aks'
+
 stages:
 
 - stage: Gitleaks
@@ -31,43 +35,76 @@ stages:
     - checkout: self
       fetchDepth: 0
 
-    - bash: |
-        set -e
+    - powershell: |
+        $ErrorActionPreference = "Stop"
 
-        curl --proto '=https' --tlsv1.2 -sSfL \
-          "https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz" \
-          -o gitleaks.tar.gz
+        $version = "8.24.2"
+        $zip = "$(Agent.TempDirectory)\gitleaks.zip"
+        $dir = "$(Agent.TempDirectory)\gitleaks"
 
-        tar -xzf gitleaks.tar.gz
+        Invoke-WebRequest `
+          -Uri "https://github.com/gitleaks/gitleaks/releases/download/v$version/gitleaks_${version}_windows_x64.zip" `
+          -OutFile $zip
 
-        sudo mv gitleaks /usr/local/bin/gitleaks
+        if (Test-Path $dir) {
+          Remove-Item $dir -Recurse -Force
+        }
+
+        Expand-Archive `
+          -Path $zip `
+          -DestinationPath $dir `
+          -Force
+
+        & "$dir\gitleaks.exe" version
       displayName: 'Install Gitleaks'
 
-    - bash: |
-        set -e
+    - powershell: |
+        $ErrorActionPreference = "Stop"
 
-        gitleaks detect \
-          --source "$(Build.SourcesDirectory)" \
-          --redact
+        $gitleaks = "$(Agent.TempDirectory)\gitleaks\gitleaks.exe"
+        $reportDir = "$(Build.ArtifactStagingDirectory)\gitleaks"
+
+        New-Item `
+          -ItemType Directory `
+          -Path $reportDir `
+          -Force | Out-Null
+
+        & $gitleaks detect `
+          --source "$(Build.SourcesDirectory)" `
+          --redact `
+          --report-format sarif `
+          --report-path "$reportDir\gitleaks.sarif"
+
+        if ($LASTEXITCODE -ne 0) {
+          exit $LASTEXITCODE
+        }
       displayName: 'Scan for Secrets'
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Gitleaks Report'
+      condition: always()
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)\gitleaks'
+        artifact: 'Gitleaks-Report'
+        publishLocation: 'pipeline'
 
 
 - stage: SonarCloud
-  displayName: 'SonarCloud'
+  displayName: 'SonarCloud and Quality Gate'
 
   dependsOn: Gitleaks
   condition: succeeded()
 
   jobs:
   - job: SonarAnalysis
-    displayName: 'Code Analysis and Quality Gate'
+    displayName: 'SonarCloud Analysis'
 
     steps:
 
     - checkout: self
       fetchDepth: 0
 
-    - task: SonarCloudPrepare@4
+    - task: SonarCloudPrepare@4.2.5
       displayName: 'Prepare SonarCloud Analysis'
       inputs:
         SonarCloud: '$(sonarServiceConnection)'
@@ -78,12 +115,13 @@ stages:
         cliProjectName: '$(sonarProjectName)'
         cliSources: '.'
         extraProperties: |
-          sonar.python.version=3.7
+          sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4,**/node_modules/**
+          sonar.sourceEncoding=UTF-8
 
-    - task: SonarCloudAnalyze@4
+    - task: SonarCloudAnalyze@4.2.5
       displayName: 'Run SonarCloud Analysis'
 
-    - task: SonarCloudPublish@4
+    - task: SonarCloudPublish@4.2.5
       displayName: 'Quality Gate'
       inputs:
         pollingTimeoutSec: '300'
@@ -103,6 +141,11 @@ stages:
 
     - checkout: self
 
+    - powershell: |
+        docker version
+        docker info
+      displayName: 'Check Docker'
+
     - task: Docker@2
       displayName: 'Build and Push Image to ACR'
       inputs:
@@ -114,8 +157,47 @@ stages:
           $(artifactVersion)
           latest
 
-    - bash: |
-        echo "Artifact Version: $(artifactVersion)"
-        echo "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
-        echo "$(containerRegistry)/$(imageRepository):latest"
+    - powershell: |
+        Write-Host "IMAGE PUSH SUCCESSFUL"
+        Write-Host "Registry: $(containerRegistry)"
+        Write-Host "Repository: $(imageRepository)"
+        Write-Host "Artifact Version: $(artifactVersion)"
+        Write-Host "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
+        Write-Host "$(containerRegistry)/$(imageRepository):latest"
       displayName: 'Show Artifact Version'
+
+
+- stage: KubernetesDeploy
+  displayName: 'Kubernetes Deploy'
+
+  dependsOn: BuildAndPush
+  condition: succeeded()
+
+  jobs:
+  - job: DeployToAKS
+    displayName: 'Deploy to AKS'
+
+    steps:
+
+    - checkout: self
+
+    - task: KubernetesManifest@1
+      displayName: 'Deploy Application to AKS'
+      inputs:
+        action: 'deploy'
+        connectionType: 'azureResourceManager'
+        azureSubscriptionConnection: '$(azureServiceConnection)'
+        azureResourceGroup: '$(aksResourceGroup)'
+        kubernetesCluster: '$(aksCluster)'
+        namespace: 'default'
+        manifests: |
+          k8s/deployment.yaml
+          k8s/service.yaml
+        containers: |
+          $(containerRegistry)/$(imageRepository):$(artifactVersion)
+
+    - powershell: |
+        kubectl get deployments
+        kubectl get pods
+        kubectl get services
+      displayName: 'Verify Kubernetes Deployment'
