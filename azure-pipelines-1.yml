@@ -10,7 +10,7 @@ variables:
   dockerRegistryServiceConnection: 'ACR-HAD'
   containerRegistry: 'hadacr2026.azurecr.io'
   imageRepository: 'human-activity-detection'
-  dockerfilePath: '$(Build.SourcesDirectory)\Dockerfile'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
 
   sonarServiceConnection: 'SONARCLOUD-SERVICE'
   sonarOrganization: 'sanjugm-1'
@@ -27,6 +27,7 @@ stages:
     displayName: 'Secret Scan'
 
     steps:
+
     - checkout: self
       fetchDepth: 0
 
@@ -95,10 +96,11 @@ stages:
     displayName: 'SonarCloud Analysis'
 
     steps:
+
     - checkout: self
       fetchDepth: 0
 
-    - task: SonarCloudPrepare@4
+    - task: SonarCloudPrepare@4.2.5
       displayName: 'Prepare SonarCloud Analysis'
       inputs:
         SonarCloud: '$(sonarServiceConnection)'
@@ -112,11 +114,24 @@ stages:
           sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4,**/node_modules/**
           sonar.sourceEncoding=UTF-8
 
-    - task: SonarCloudAnalyze@4
+    - task: SonarCloudAnalyze@4.2.5
       displayName: 'Run SonarCloud Analysis'
 
-    - task: SonarCloudPublish@4
-      displayName: 'Quality Gate'
+
+- stage: QualityGate
+  displayName: 'Quality Gate'
+
+  dependsOn: SonarCloud
+  condition: succeeded()
+
+  jobs:
+  - job: QualityGateCheck
+    displayName: 'Quality Gate Check'
+
+    steps:
+
+    - task: SonarCloudPublish@4.2.5
+      displayName: 'Publish Quality Gate'
       inputs:
         pollingTimeoutSec: '300'
 
@@ -124,7 +139,7 @@ stages:
 - stage: BuildAndPush
   displayName: 'Build and Push to ACR'
 
-  dependsOn: SonarCloud
+  dependsOn: QualityGate
   condition: succeeded()
 
   jobs:
@@ -132,6 +147,7 @@ stages:
     displayName: 'Build Docker Image and Push to ACR'
 
     steps:
+
     - checkout: self
 
     - powershell: |
@@ -150,16 +166,10 @@ stages:
           latest
 
     - powershell: |
-        Write-Host "========================================"
         Write-Host "IMAGE PUSH SUCCESSFUL"
-        Write-Host "========================================"
-        Write-Host ""
         Write-Host "Registry: $(containerRegistry)"
         Write-Host "Repository: $(imageRepository)"
         Write-Host "Artifact Version: $(artifactVersion)"
-        Write-Host ""
         Write-Host "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
         Write-Host "$(containerRegistry)/$(imageRepository):latest"
-        Write-Host ""
-        Write-Host "========================================"
       displayName: 'Show Artifact Version'
