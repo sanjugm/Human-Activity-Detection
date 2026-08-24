@@ -9,4 +9,3 @@ __pycache__
 *.log
 Jenkinsfile
 azure-pipelines.yml
-sample_video.mp4
