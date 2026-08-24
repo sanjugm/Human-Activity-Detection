@@ -1,4 +1,3 @@
-
 trigger:
   - main
 
@@ -17,6 +16,11 @@ variables:
   sonarOrganization: 'sanjugm-1'
   sonarProjectKey: 'sanjugm_HAD'
   sonarProjectName: 'HAD'
+
+  azureServiceConnection: 'AZURE-SERVICE-CONNECTION'
+  aksResourceGroup: 'had-south-rg'
+  aksCluster: 'had-aks'
+
 
 stages:
 
@@ -87,14 +91,14 @@ stages:
 
 
 - stage: SonarCloud
-  displayName: 'SonarCloud'
+  displayName: 'SonarCloud and Quality Gate'
 
   dependsOn: Gitleaks
   condition: succeeded()
 
   jobs:
   - job: SonarAnalysis
-    displayName: 'SonarCloud Analysis'
+    displayName: 'SonarCloud Analysis and Quality Gate'
 
     steps:
 
@@ -114,24 +118,10 @@ stages:
         extraProperties: |
           sonar.exclusions=**/*.ipynb,**/.venv/**,**/models/**,**/images/**,**/*.mp4,**/node_modules/**
           sonar.sourceEncoding=UTF-8
+          sonar.verbose=true
 
     - task: SonarCloudAnalyze@4.2.5
       displayName: 'Run SonarCloud Analysis'
-
-
-- stage: QualityGate
-  displayName: 'Quality Gate'
-
-  dependsOn: SonarCloud
-  condition: succeeded()
-
-  jobs:
-  - job: QualityGateCheck
-    displayName: 'Quality Gate Check'
-
-    steps:
-
-    - checkout: self
 
     - task: SonarCloudPublish@4.2.5
       displayName: 'Publish Quality Gate'
@@ -142,7 +132,7 @@ stages:
 - stage: BuildAndPush
   displayName: 'Build and Push to ACR'
 
-  dependsOn: QualityGate
+  dependsOn: SonarCloud
   condition: succeeded()
 
   jobs:
@@ -177,3 +167,39 @@ stages:
         Write-Host "$(containerRegistry)/$(imageRepository):$(artifactVersion)"
         Write-Host "$(containerRegistry)/$(imageRepository):latest"
       displayName: 'Show Artifact Version'
+
+
+- stage: KubernetesDeploy
+  displayName: 'Kubernetes Deploy'
+
+  dependsOn: BuildAndPush
+  condition: succeeded()
+
+  jobs:
+  - job: DeployToAKS
+    displayName: 'Deploy Application to AKS'
+
+    steps:
+
+    - checkout: self
+
+    - task: KubernetesManifest@1
+      displayName: 'Deploy Application to AKS'
+      inputs:
+        action: 'deploy'
+        connectionType: 'azureResourceManager'
+        azureSubscriptionConnection: '$(azureServiceConnection)'
+        azureResourceGroup: '$(aksResourceGroup)'
+        kubernetesCluster: '$(aksCluster)'
+        namespace: 'default'
+        manifests: |
+          k8s/deployment.yaml
+          k8s/service.yaml
+        containers: |
+          $(containerRegistry)/$(imageRepository):$(artifactVersion)
+
+    - powershell: |
+        kubectl get deployments
+        kubectl get pods
+        kubectl get services
+      displayName: 'Verify Kubernetes Deployment'
