@@ -130,6 +130,8 @@ stages:
 
     steps:
 
+    - checkout: self
+
     - task: SonarCloudPublish@4.2.5
       displayName: 'Publish Quality Gate'
       inputs:
@@ -151,7 +153,8 @@ stages:
     - checkout: self
 
     - powershell: |
-        docker --version
+        docker version
+        docker info
       displayName: 'Check Docker'
 
     - task: Docker@2
