@@ -5,7 +5,6 @@ agent {
     }
     environment {
 
-        // CHANGE THIS ONLY if your Python 3.7 path is different
         PYTHON = "C:\\Users\\sanju\\AppData\\Local\\Programs\\Python\\Python37\\python.exe"
 
         IMAGE_NAME = "had"
